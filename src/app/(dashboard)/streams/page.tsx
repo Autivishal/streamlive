@@ -42,20 +42,53 @@ export default function StreamsPage() {
 
     useEffect(() => { fetchAll(); const i = setInterval(fetchAll, 5000); return () => clearInterval(i); }, []);
 
+    const [submitting, setSubmitting] = useState(false);
+    const [createError, setCreateError] = useState("");
+
     const createStream = async (e: React.FormEvent) => {
         e.preventDefault();
-        const res = await fetch("/api/streams", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...form, repeatCount: parseInt(form.repeatCount) || 1, playlistId: form.playlistId || null }),
-        });
-        if (res.ok) { setShowNew(false); setForm({ ...form, name: "", streamKey: "" }); await fetchAll(); }
+        setSubmitting(true);
+        setCreateError("");
+
+        try {
+            const res = await fetch("/api/streams", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...form, repeatCount: parseInt(form.repeatCount) || 1, playlistId: form.playlistId || null }),
+            });
+
+            if (res.ok) {
+                setShowNew(false);
+                setForm({
+                    name: "", platform: "YouTube", playlistId: "", rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
+                    streamKey: "", loopMode: "INFINITE", repeatCount: "1",
+                    resolution: "source", videoBitrate: "auto", audioBitrate: "128k",
+                });
+                await fetchAll();
+            } else {
+                const d = await res.json();
+                setCreateError(d.error || "Failed to create stream configuration.");
+            }
+        } catch (err) {
+            setCreateError("Network error while creating stream.");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const startStream = async (id: string) => {
         setActionId(id);
-        const res = await fetch(`/api/streams/${id}/start`, { method: "POST" });
-        if (!res.ok) { const d = await res.json(); alert(d.error || "Failed to start"); }
-        await fetchAll(); setActionId(null);
+        try {
+            const res = await fetch(`/api/streams/${id}/start`, { method: "POST" });
+            const d = await res.json();
+            if (!res.ok) {
+                alert(`⚠️ ${d.error || "Failed to start stream"}`);
+            }
+        } catch (err) {
+            alert("⚠️ Network error while starting stream");
+        } finally {
+            await fetchAll();
+            setActionId(null);
+        }
     };
 
     const stopStream = async (id: string) => {
@@ -156,8 +189,15 @@ export default function StreamsPage() {
                             </select>
                         </div>
                     </div>
+                    {createError && (
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-3 text-sm">
+                            {createError}
+                        </div>
+                    )}
                     <div className="flex gap-3 pt-2">
-                        <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-all">Create Stream</button>
+                        <button type="submit" disabled={submitting} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-all">
+                            {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : "Create Stream"}
+                        </button>
                         <button type="button" onClick={() => setShowNew(false)} className="bg-white/5 hover:bg-white/10 text-white/60 text-sm px-5 py-2.5 rounded-xl transition-all">Cancel</button>
                     </div>
                 </form>
