@@ -1,0 +1,207 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  videos    Video[]
+  playlists Playlist[]
+  streams   Stream[]
+  schedules Schedule[]
+  workers   Worker[]
+  events    StreamEvent[]
+
+  @@map("users")
+}
+
+model Video {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title             String
+  filename          String
+  cloudinaryPublicId String
+  secureUrl         String
+  thumbnailUrl      String?
+  duration          Float    @default(0)
+  width             Int?
+  height            Int?
+  format            String?
+  bytes             Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  playlistItems PlaylistItem[]
+
+  @@index([userId])
+  @@map("videos")
+}
+
+model Playlist {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items     PlaylistItem[]
+  streams   Stream[]
+  schedules Schedule[]
+
+  @@index([userId])
+  @@map("playlists")
+}
+
+model PlaylistItem {
+  id         String   @id @default(cuid())
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  videoId    String
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  position   Int
+  createdAt  DateTime @default(now())
+
+  @@unique([playlistId, position])
+  @@index([playlistId])
+  @@index([videoId])
+  @@map("playlist_items")
+}
+
+enum StreamStatus {
+  IDLE
+  STARTING
+  STREAMING
+  STOPPING
+  STOPPED
+  ERROR
+}
+
+enum LoopMode {
+  ONCE
+  INFINITE
+  REPEAT
+}
+
+model Stream {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  playlistId      String?
+  playlist        Playlist?    @relation(fields: [playlistId], references: [id], onDelete: SetNull)
+  workerId        String?
+  worker          Worker?      @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  platform        String       @default("YouTube")
+  rtmpUrl         String
+  streamKeyEnc    String       // AES-256 encrypted
+  loopMode        LoopMode     @default(INFINITE)
+  repeatCount     Int?
+  resolution      String       @default("source")
+  videoBitrate    String       @default("auto")
+  audioBitrate    String       @default("128k")
+  status          StreamStatus @default(IDLE)
+  currentVideoIdx Int          @default(0)
+  currentVideoTitle String?
+  startedAt       DateTime?
+  stoppedAt       DateTime?
+  errorMessage    String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  events StreamEvent[]
+
+  @@index([userId])
+  @@index([workerId])
+  @@map("streams")
+}
+
+model StreamEvent {
+  id        String   @id @default(cuid())
+  streamId  String
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([streamId])
+  @@map("stream_events")
+}
+
+enum WorkerStatus {
+  CONNECTED
+  IDLE
+  STARTING
+  STREAMING
+  STOPPING
+  ERROR
+  DISCONNECTED
+}
+
+model Worker {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token         String       @unique
+  name          String?
+  hostname      String?
+  version       String?
+  status        WorkerStatus @default(DISCONNECTED)
+  lastHeartbeat DateTime?
+  activeStreamId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  streams Stream[]
+
+  @@index([userId])
+  @@map("workers")
+}
+
+enum ScheduleType {
+  ONCE
+  DAILY
+  SELECTED_DAYS
+}
+
+model Schedule {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  playlistId String?
+  playlist   Playlist?    @relation(fields: [playlistId], references: [id], onDelete: SetNull)
+  name       String
+  type       ScheduleType @default(DAILY)
+  startTime  String       // "HH:MM" format
+  stopTime   String?      // "HH:MM" format, null = manual stop
+  days       Int[]        // 0=Sun, 1=Mon, ... 6=Sat
+  enabled    Boolean      @default(true)
+  loopMode   LoopMode     @default(INFINITE)
+  rtmpUrl    String?
+  streamKeyEnc String?    // AES-256 encrypted
+  lastRunAt  DateTime?
+  nextRunAt  DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([userId])
+  @@map("schedules")
+}
