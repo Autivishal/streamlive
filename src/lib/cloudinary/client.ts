@@ -22,7 +22,6 @@ export function getSignedUploadParams(folder = "streamlive/videos"): SignedUploa
     const paramsToSign = {
         folder,
         timestamp,
-        resource_type: "video",
     };
 
     const signature = cloudinary.utils.api_sign_request(

@@ -44,13 +44,19 @@ export default function VideosPage() {
             setUploading(u => [...u, { id: uid, name: file.name, progress: 0, status: "uploading" }]);
 
             try {
+                // Get fresh signed params per upload
+                const signRes = await fetch("/api/upload/sign");
+                if (!signRes.ok) {
+                    throw new Error("Failed to get upload signature");
+                }
+                const { signature, timestamp, cloudName, apiKey, folder } = await signRes.json();
+
                 const formData = new FormData();
                 formData.append("file", file);
                 formData.append("signature", signature);
                 formData.append("timestamp", timestamp.toString());
                 formData.append("api_key", apiKey);
                 formData.append("folder", folder);
-                formData.append("resource_type", "video");
 
                 const xhr = new XMLHttpRequest();
                 xhr.upload.onprogress = (e) => {
@@ -83,7 +89,12 @@ export default function VideosPage() {
                             setUploading(u => u.map(x => x.id === uid ? { ...x, status: "done", progress: 100 } : x));
                             resolve();
                         } else {
-                            reject(new Error("Upload failed"));
+                            let errMsg = "Upload failed";
+                            try {
+                                const errData = JSON.parse(xhr.responseText);
+                                errMsg = errData.error?.message || errMsg;
+                            } catch { }
+                            reject(new Error(errMsg));
                         }
                     };
                     xhr.onerror = () => reject(new Error("Network error"));
@@ -92,8 +103,9 @@ export default function VideosPage() {
                 });
 
                 await fetchVideos();
-            } catch (err) {
-                setUploading(u => u.map(x => x.id === uid ? { ...x, status: "error", error: "Upload failed" } : x));
+            } catch (err: any) {
+                const errorMessage = err?.message || "Upload failed";
+                setUploading(u => u.map(x => x.id === uid ? { ...x, status: "error", error: errorMessage } : x));
             }
 
             setTimeout(() => setUploading(u => u.filter(x => x.id !== uid)), 5000);
