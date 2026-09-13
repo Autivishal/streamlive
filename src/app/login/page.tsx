@@ -8,7 +8,10 @@ import { Eye, EyeOff, Tv2, Loader2 } from "lucide-react";
 function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+    const rawCallback = searchParams.get("callbackUrl");
+    const callbackUrl = (rawCallback && rawCallback.startsWith("/") && !rawCallback.startsWith("//"))
+        ? rawCallback
+        : "/dashboard";
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
